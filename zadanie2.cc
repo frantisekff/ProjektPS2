@@ -24,11 +24,11 @@ std::vector<double> createXAxis(std::vector<double> meassurements[], Gnuplot2dDa
 void createXAxisAndConvertToDouble(std::vector<int> meassurements[], std::vector<double> xValues);
 void countPacketForEverySecond(std::vector<double> packetArrivalTimes, std::vector<int> meassurementsArray[], uint64_t index);
 void computeDataAndSetGraph(std::vector<double> meassurements[], std::vector<double> xValues, Gnuplot2dDataset &dataToSet, Gnuplot2dDataset &errorBarsToSet);
-void receivedPacketsCallback(Ptr< const Packet > packet, const Address &address) ;
+void receivedPacketsCallback(Ptr< const Packet > packet, const Address &address);
 void receivePacketOnCsmaCallback(Ptr< const Packet> packet);
 void appSendPacketCallback(Ptr< const Packet> packet);
 static void changeOffTimeApp();
-void backToStartPointCallback(Ptr< const MobilityModel> mobilityModel) ;
+void backToStartPointCallback(Ptr< const MobilityModel> mobilityModel);
 void setUavSpeed(int speed);
 static void speedUpRobot();
 
@@ -88,8 +88,7 @@ bool commingBack = false;
 Ptr<RandomRectanglePositionAllocator> randWaypointAllocator;
 Ptr<RandomRectanglePositionAllocator> startPointAllocator;
 
-
-static void doSimulation(double simulationTime) {
+static void makeSimulation(double simulationTime) {
     // Server Node
     NodeContainer serverNodes;
     serverNodes.Create(1);
@@ -392,7 +391,7 @@ int main(int argc, char *argv[]) {
                 std::cout << "Num. " << countLoop << "/" << allLoops << std::endl;
             }
 
-            doSimulation((double) simTime);
+            makeSimulation((double) simTime);
 
             if (graphNumber == 1) {
                 countPacketForEverySecond(receiveTimes, packetsPerSec, i);
@@ -474,7 +473,6 @@ int main(int argc, char *argv[]) {
         } else {
             std::cout << "No data for plot, graph will not be generated" << std::endl;
         }
-
     }
     return 0;
 }
@@ -486,6 +484,7 @@ int main(int argc, char *argv[]) {
 // -------------------------------------------------------------------//
 
 // Count received packets of Sink App
+
 void receivedPacketsCallback(Ptr< const Packet > packet, const Address &address) {
     receivedPackets++;
     receiveTimes.push_back(Simulator::Now().GetSeconds());
@@ -536,7 +535,6 @@ void backToStartPointCallback(Ptr< const MobilityModel> mobilityModel) {
     }
 }
 
-
 void setUavSpeed(int speed) {
 
     Config::Set("NodeList/" + std::to_string(uavID) + "/$ns3::MobilityModel/$ns3::RandomWaypointMobilityModel/Speed", StringValue("ns3::ConstantRandomVariable[Constant=" + std::to_string(speed) + "]"));
@@ -582,7 +580,7 @@ void countPacketForEverySecond(std::vector<double> packetArrivalTimes, std::vect
     }
 }
 
-std::vector<double> createXAxis(std::vector<double> measuredData[], Gnuplot2dDataset &dataToSet, Gnuplot2dDataset &errorBarsToSet ) {
+std::vector<double> createXAxis(std::vector<double> measuredData[], Gnuplot2dDataset &dataToSet, Gnuplot2dDataset &errorBarsToSet) {
     std::vector<double> xValues;
     for (int i = 0; i < measuredData[0].size(); ++i) {
         xValues.push_back((double) i);
@@ -599,7 +597,8 @@ void createXAxisAndConvertToDouble(std::vector<int> meassurements[], std::vector
 }
 
 // Compute avarage and deviation
-void computeDataAndSetGraph(std::vector<double> measuredData[], std::vector<double> xValues, Gnuplot2dDataset &dataToSet, Gnuplot2dDataset &errorBarsToSet ) {
+
+void computeDataAndSetGraph(std::vector<double> measuredData[], std::vector<double> xValues, Gnuplot2dDataset &dataToSet, Gnuplot2dDataset &errorBarsToSet) {
     for (std::vector<double>::size_type i = 0; i < measuredData[0].size(); ++i) {
         double avg = 0.0;
         for (uint64_t j = 0; j < nRuns; ++j) {
@@ -671,34 +670,29 @@ Gnuplot setupGraphAndData(int graphNumber) {
     Gnuplot graph("graf" + std::to_string(graphNumber) + ".svg");
 
     graph.SetTerminal("svg");
-    switch (graphNumber) {
-        case 1:
-            graph.SetTitle("Porovnanie odoslanych paketov s prijatymi paketmi v case (5 spusteni)");
-            graph.SetLegend("Cas [s]", "Priemerny pocet odoslanych/prijatych paketov ");
+    if (graphNumber == 1) {
+        graph.SetTitle("Porovnanie odoslanych paketov s prijatymi paketmi v case (5 spusteni)");
+        graph.SetLegend("Cas [s]", "Priemerny pocet odoslanych/prijatych paketov ");
 
-            data.SetTitle("Prijate pakety (Sink App)");
-            errorBars.SetTitle("Smerodajna odchylka (Sink App)");
+        data.SetTitle("Prijate pakety (Sink App)");
+        errorBars.SetTitle("Smerodajna odchylka (Sink App)");
 
-            data2.SetTitle("Odoslane pakety (UAV)");
-            data2.SetStyle(Gnuplot2dDataset::LINES);
+        data2.SetTitle("Odoslane pakety (UAV)");
+        data2.SetStyle(Gnuplot2dDataset::LINES);
 
-            errorBars2.SetTitle("Smerodajna odchylka (UAV)");
-            errorBars2.SetStyle(Gnuplot2dDataset::POINTS);
-            errorBars2.SetErrorBars(Gnuplot2dDataset::Y);
-
-            break;
-        case 2:
-            graph.SetTitle("Pocet prijatych paketov vzhladom k intervalu Hello paketov");
-            graph.SetLegend("Interval odosielania Hello paketov [ms]", "Pocet prijatych paketov za celu simulaciu (3x spustene)");
-            data.SetTitle("Pocet prijatych paketov (Sink app)");
-            errorBars.SetTitle("Smerodajna odchylka (Sink App)");
-            break;
-        case 3:
-            graph.SetTitle("Pocet prijatych paketov vzhladom k rychlosti UAV");
-            graph.SetLegend("Rychlost UAV", "Pocet prijatych paketov za celu simulaciu (5x spustene)");
-            data.SetTitle("Pocet prijatych paketov");
-            errorBars.SetTitle("Smerodajna odchylka ");
-            break;
+        errorBars2.SetTitle("Smerodajna odchylka (UAV)");
+        errorBars2.SetStyle(Gnuplot2dDataset::POINTS);
+        errorBars2.SetErrorBars(Gnuplot2dDataset::Y);
+    } else if (graphNumber == 2) {
+        graph.SetTitle("Pocet prijatych paketov vzhladom k intervalu Hello paketov");
+        graph.SetLegend("Interval odosielania Hello paketov [ms]", "Pocet prijatych paketov za celu simulaciu (3x spustene)");
+        data.SetTitle("Pocet prijatych paketov (Sink app)");
+        errorBars.SetTitle("Smerodajna odchylka (Sink App)");
+    } else if (graphNumber == 3) {
+        graph.SetTitle("Pocet prijatych paketov vzhladom k rychlosti UAV");
+        graph.SetLegend("Rychlost UAV", "Pocet prijatych paketov za celu simulaciu (5x spustene)");
+        data.SetTitle("Pocet prijatych paketov");
+        errorBars.SetTitle("Smerodajna odchylka ");
     }
 
     data.SetStyle(Gnuplot2dDataset::LINES);
