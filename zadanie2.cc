@@ -21,12 +21,20 @@ using namespace ns3;
 void runSim(double);
 void fillGnuplotData(std::vector<int> meassurements[]);
 void fillGnuplotData(std::vector<double> meassurements[]);
-void createXAxis(std::vector<double> meassurements[]);
+void createXAxis(std::vector<double> meassurements[], Gnuplot2dDataset &dataToSet, Gnuplot2dDataset &errorBarsToSet);
 
 void createXAxisAndConvertToDouble(std::vector<int> meassurements[], std::vector<double> xValues);
 void fillGnuplotData(std::vector<double> meassurements[], std::vector<double> xValues);
 void countPacketForEverySecond(std::vector<double> packetArrivalTimes, std::vector<int> meassurementsArray[], uint64_t index);
-void computeDataAndSetGraph(std::vector<double> meassurements[], std::vector<double> xValues);
+void computeDataAndSetGraph(std::vector<double> meassurements[], std::vector<double> xValues, Gnuplot2dDataset &dataToSet, Gnuplot2dDataset &errorBarsToSet);
+void receivedPacketsCallback(Ptr< const Packet > packet, const Address &address) ;
+void receivePacketOnCsmaCallback(Ptr< const Packet> packet);
+void appSendPacketCallback(Ptr< const Packet> packet);
+static void changeOffTimeApp();
+void backToStartPointCallback(Ptr< const MobilityModel> mobilityModel) ;
+void setUavSpeed(int speed);
+static void speedUpRobot();
+
 CommandLine addValuesCmd();
 AnimationInterface createAnimFile(NodeContainer apNodes, NodeContainer serverNodes, NodeContainer uavNodes);
 Gnuplot setupGraphAndData(int graphNumber);
@@ -83,67 +91,6 @@ bool commingBack = false;
 Ptr<RandomRectanglePositionAllocator> randWaypointAllocator;
 Ptr<RandomRectanglePositionAllocator> startPointAllocator;
 
-// Count received packets of Sink App
-
-void receivedPacketsCallback(Ptr< const Packet > packet, const Address &address) {
-    receivedPackets++;
-    receiveTimes.push_back(Simulator::Now().GetSeconds());
-}
-
-void receivePacketOnCsmaCallback(Ptr< const Packet> packet) {
-    ++allPacketsRecieved;
-    allPacketsArrivalTimes.push_back(Simulator::Now().GetSeconds());
-}
-
-void appSendPacketCallback(Ptr< const Packet> packet) {
-    ++allSendedPackets;
-    allPacketsSendedTimes.push_back(Simulator::Now().GetSeconds());
-}
-
-static void changeOffTimeApp() {
-
-    Config::Set("NodeList/" + std::to_string(uavID) + "/ApplicationList/0/$ns3::OnOffApplication/OffTime", StringValue("ns3::ConstantRandomVariable[Constant=0.6]"));
-}
-
-void backToStartPointCallback(Ptr< const MobilityModel> mobilityModel) {
-    Vector position = mobilityModel->GetPosition();
-
-    if (printLogs) {
-        std::cout << Simulator::Now().GetSeconds() << "s " << "x: " << position.x << "; y: " << position.y << std::endl;
-    }
-
-    if (!commingBack) {
-        // is the uav out of area?
-        if (position.x < 0.0 || position.x > (6 * distance) || position.y < 0.0 || position.y > (6 * distance)) {
-            commingBack = true;
-            Config::Set("/NodeList/" + std::to_string(uavID) + "/$ns3::MobilityModel/$ns3::RandomWaypointMobilityModel/PositionAllocator", PointerValue(startPointAllocator));
-
-            if (printLogs) {
-                std::cout << Simulator::Now().GetSeconds() << "s " << "Robot can not send dat. He will go back to start point" << std::endl;
-            }
-        }
-    } else {
-        // Is uav home?
-        if (position.x > (3.5 * distance - 0.5) && position.x < (3.5 * distance + 0.5) && position.y > (3.5 * distance - 0.5) && position.y < (3.5 * distance + 0.5)) {
-            commingBack = false;
-            Config::Set("/NodeList/" + std::to_string(uavID) + "/$ns3::MobilityModel/$ns3::RandomWaypointMobilityModel/PositionAllocator", PointerValue(randWaypointAllocator));
-
-            if (printLogs) {
-                std::cout << Simulator::Now().GetSeconds() << "s " << "Robot reached start point and will walk randomly" << std::endl;
-            }
-        }
-    }
-}
-
-void setUavSpeed(int speed) {
-
-    Config::Set("NodeList/" + std::to_string(uavID) + "/$ns3::MobilityModel/$ns3::RandomWaypointMobilityModel/Speed", StringValue("ns3::ConstantRandomVariable[Constant=" + std::to_string(speed) + "]"));
-}
-
-static void speedUpRobot() {
-
-    Config::Set("NodeList/" + std::to_string(uavID) + "/$ns3::MobilityModel/$ns3::RandomWaypointMobilityModel/Speed", StringValue("ns3::ConstantRandomVariable[Constant=60]"));
-}
 
 static void doSimulation(double simulationTime) {
     // Server Node
@@ -401,11 +348,11 @@ int main(int argc, char *argv[]) {
     int outerRuns = 1;
 
     if (graphNumber == 2) {
-        outerRuns = 10;
+        outerRuns = 2;
         intervalHelloPackets.clear();
     }
     if (graphNumber == 3) {
-        outerRuns = 10;
+        outerRuns = 2;
         uavSpeedAggregateGraph.clear();
     }
 
@@ -488,7 +435,7 @@ int main(int argc, char *argv[]) {
         }
 
 
-        fillGnuplotData(quotient);
+        createXAxis(quotient, data, errorBars);
 
         std::vector<double> quotient2[nRuns];
         for (int i = 0; i < nRuns; ++i) {
@@ -500,7 +447,7 @@ int main(int argc, char *argv[]) {
                 }
             }
         }
-        createXAxis(quotient2);
+        createXAxis(quotient2, data2, errorBars2);
 
         graph.AddDataset(errorBars2);
         graph.AddDataset(data2);
@@ -533,6 +480,69 @@ int main(int argc, char *argv[]) {
     }
     return 0;
 }
+
+// Count received packets of Sink App
+
+void receivedPacketsCallback(Ptr< const Packet > packet, const Address &address) {
+    receivedPackets++;
+    receiveTimes.push_back(Simulator::Now().GetSeconds());
+}
+
+void receivePacketOnCsmaCallback(Ptr< const Packet> packet) {
+    ++allPacketsRecieved;
+    allPacketsArrivalTimes.push_back(Simulator::Now().GetSeconds());
+}
+
+void appSendPacketCallback(Ptr< const Packet> packet) {
+    ++allSendedPackets;
+    allPacketsSendedTimes.push_back(Simulator::Now().GetSeconds());
+}
+
+static void changeOffTimeApp() {
+
+    Config::Set("NodeList/" + std::to_string(uavID) + "/ApplicationList/0/$ns3::OnOffApplication/OffTime", StringValue("ns3::ConstantRandomVariable[Constant=0.6]"));
+}
+
+void backToStartPointCallback(Ptr< const MobilityModel> mobilityModel) {
+    Vector position = mobilityModel->GetPosition();
+
+    if (printLogs) {
+        std::cout << Simulator::Now().GetSeconds() << "s " << "x: " << position.x << "; y: " << position.y << std::endl;
+    }
+
+    if (!commingBack) {
+        // is the uav out of area?
+        if (position.x < 0.0 || position.x > (6 * distance) || position.y < 0.0 || position.y > (6 * distance)) {
+            commingBack = true;
+            Config::Set("/NodeList/" + std::to_string(uavID) + "/$ns3::MobilityModel/$ns3::RandomWaypointMobilityModel/PositionAllocator", PointerValue(startPointAllocator));
+
+            if (printLogs) {
+                std::cout << Simulator::Now().GetSeconds() << "s " << "Robot can not send dat. He will go back to start point" << std::endl;
+            }
+        }
+    } else {
+        // Is uav home?
+        if (position.x > (3.5 * distance - 0.5) && position.x < (3.5 * distance + 0.5) && position.y > (3.5 * distance - 0.5) && position.y < (3.5 * distance + 0.5)) {
+            commingBack = false;
+            Config::Set("/NodeList/" + std::to_string(uavID) + "/$ns3::MobilityModel/$ns3::RandomWaypointMobilityModel/PositionAllocator", PointerValue(randWaypointAllocator));
+
+            if (printLogs) {
+                std::cout << Simulator::Now().GetSeconds() << "s " << "Robot reached start point and will walk randomly" << std::endl;
+            }
+        }
+    }
+}
+
+void setUavSpeed(int speed) {
+
+    Config::Set("NodeList/" + std::to_string(uavID) + "/$ns3::MobilityModel/$ns3::RandomWaypointMobilityModel/Speed", StringValue("ns3::ConstantRandomVariable[Constant=" + std::to_string(speed) + "]"));
+}
+
+static void speedUpRobot() {
+
+    Config::Set("NodeList/" + std::to_string(uavID) + "/$ns3::MobilityModel/$ns3::RandomWaypointMobilityModel/Speed", StringValue("ns3::ConstantRandomVariable[Constant=60]"));
+}
+
 
 void countPacketForEverySecond(std::vector<double> packetArrivalTimes, std::vector<int> meassurementsArray[], uint64_t index) {
     // we loop through all times when we received packets
@@ -580,12 +590,12 @@ void fillGnuplotData(std::vector<double> meassurements[]) {
     fillGnuplotData(meassurements, xVals);
 }
 
-void createXAxis(std::vector<double> measuredData[]) {
+void createXAxis(std::vector<double> measuredData[], Gnuplot2dDataset &dataToSet, Gnuplot2dDataset &errorBarsToSet ) {
     std::vector<double> xValues;
     for (int i = 0; i < measuredData[0].size(); ++i) {
         xValues.push_back((double) i);
     }
-    computeDataAndSetGraph(measuredData, xValues);
+    computeDataAndSetGraph(measuredData, xValues, dataToSet, errorBarsToSet);
 }
 
 void createXAxisAndConvertToDouble(std::vector<int> meassurements[], std::vector<double> xValues) {
@@ -620,7 +630,7 @@ void fillGnuplotData(std::vector<double> meassurements[], std::vector<double> xV
 
 // Compute avarage and deviation
 
-void computeDataAndSetGraph(std::vector<double> measuredData[], std::vector<double> xValues) {
+void computeDataAndSetGraph(std::vector<double> measuredData[], std::vector<double> xValues, Gnuplot2dDataset &dataToSet, Gnuplot2dDataset &errorBarsToSet ) {
     for (std::vector<double>::size_type i = 0; i < measuredData[0].size(); ++i) {
         double avg = 0.0;
         for (uint64_t j = 0; j < nRuns; ++j) {
@@ -636,8 +646,8 @@ void computeDataAndSetGraph(std::vector<double> measuredData[], std::vector<doub
         deviation /= nRuns;
         deviation = sqrt(deviation);
 
-        data2.Add(xValues[i], avg);
-        errorBars2.Add(xValues[i], avg, deviation);
+        dataToSet.Add(xValues[i], avg);
+        errorBarsToSet.Add(xValues[i], avg, deviation);
     }
 }
 
