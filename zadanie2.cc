@@ -44,9 +44,12 @@ int packetSize = 0;
 
 // Variables for Graphs
 Gnuplot2dDataset data;
+// True if we got some data for plot
+bool someData = false;
 Gnuplot2dDataset errorBars;
 Gnuplot2dDataset data2;
 Gnuplot2dDataset errorBars2;
+
 
 // Sink Application packets meassurments
 // Variable for save time when sink app receive packet
@@ -66,8 +69,8 @@ std::vector<int> allPacketsMeassurements[10];
 // All packets, which have been sent by UAV
 int allSendedPackets = 0;
 std::vector<double> allPacketsSendedTimes = {};
-std::vector<int> allSendedPacketsAllRuns[10];
-std::vector<int> allSendedPacketsPerSec[10];
+std::vector<int> allSendedPacketsAllRuns[5];
+std::vector<int> allSendedPacketsPerSec[5];
 
 // For graph 2
 std::vector<double> intervalHelloPackets = {};
@@ -288,7 +291,7 @@ static void doSimulation(double simulationTime) {
 
     // -------------------------------------------------------------------//
     //                                                                    //
-    // Create OnOff Application for generate data                               //
+    // Create OnOff Application for generate data                         //
     //                                                                    //
     // -------------------------------------------------------------------//
 
@@ -327,18 +330,20 @@ static void doSimulation(double simulationTime) {
     // If UAV move make callback
     Config::ConnectWithoutContext(pathMobilityTraceSource.str(), MakeCallback(&backToStartPointCallback));
 
-    if (makeGraph >= 10 && makeGraph <= 12) {
-        // Rx - A packet has been received
+    if (makeGraph >= 1 && makeGraph <= 3) {
+        // Rx - A packet has been received on Sink app
         Config::ConnectWithoutContext("/NodeList/0/ApplicationList/0/$ns3::PacketSink/Rx", MakeCallback(&receivedPacketsCallback));
+        //Tracking received packets on csma devices
         Config::ConnectWithoutContext("/NodeList/0/DeviceList/0/$ns3::CsmaNetDevice/MacRx", MakeCallback(&receivePacketOnCsmaCallback));
+        // Tracking of sending packets from UAV 
+        Config::ConnectWithoutContext("/NodeList/" + std::to_string(uavID) + "/ApplicationList/0/$ns3::OnOffApplication/Tx", MakeCallback(&appSendPacketCallback));
     }
 
     if (printLogs) {
         std::cout << "Address for UAV " << std::to_string(uavID) << std::endl;
     }
 
-    // Tracking of sending packets from UAV 
-    Config::ConnectWithoutContext("/NodeList/" + std::to_string(uavID) + "/ApplicationList/0/$ns3::OnOffApplication/Tx", MakeCallback(&appSendPacketCallback));
+
 
     // -------------------------------------------------------------------//
     //                                                                    //
@@ -378,8 +383,8 @@ int main(int argc, char *argv[]) {
 
         graf.SetTerminal("svg");
         switch (makeGraph) {
-            case 10:
-                graf.SetTitle("Porovnanie odoslanych paketov s prijatymi paketmi v case (10 spusteni)");
+            case 1:
+                graf.SetTitle("Porovnanie odoslanych paketov s prijatymi paketmi v case (5 spusteni)");
                 graf.SetLegend("Cas [s]", "Priemerny pocet odoslanych/prijatych paketov ");
 
                 data.SetTitle("Prijate pakety (Sink App)");
@@ -393,13 +398,13 @@ int main(int argc, char *argv[]) {
                 errorBars2.SetErrorBars(Gnuplot2dDataset::Y);
 
                 break;
-            case 11:
+            case 2:
                 graf.SetTitle("Pocet prijatych paketov vzhladom k intervalu Hello paketov");
                 graf.SetLegend("Interval odosielania Hello paketov [ms]", "Pocet prijatych paketov za celu simulaciu (5x spustene)");
                 data.SetTitle("Pocet prijatych paketov (Sink app)");
                 errorBars.SetTitle("Smerodajna odchylka (Sink App)");
                 break;
-            case 12:
+            case 3:
                 graf.SetTitle("Narast poctu prijatych paketov vzhladom k rychlosti UAV");
                 graf.SetLegend("Speed UAV", "Pocet prijatych paketov za celu simulaciu (5x spustene)");
                 data.SetTitle("Pocet prijatych paketov");
@@ -412,9 +417,9 @@ int main(int argc, char *argv[]) {
         errorBars.SetErrorBars(Gnuplot2dDataset::Y);
     }
     // Set up program for type of graph
-    if (makeGraph == 10) {
+    if (makeGraph == 1) {
         nRuns = 5;
-    } else if (makeGraph >= 11 && makeGraph <= 12)
+    } else if (makeGraph >= 2 && makeGraph <= 3)
         nRuns = 2;
     else if (makeGraph == 0)
         nRuns = 1;
@@ -430,11 +435,11 @@ int main(int argc, char *argv[]) {
     //For graphs, increase hello intervals or speed of UAV,...
     int outerRuns = 1;
 
-    if (makeGraph == 11) {
+    if (makeGraph == 2) {
         outerRuns = 10;
         intervalHelloPackets.clear();
     }
-    if (makeGraph == 12) {
+    if (makeGraph == 3) {
         outerRuns = 10;
         uavSpeedAggregateGraph.clear();
     }
@@ -445,38 +450,42 @@ int main(int argc, char *argv[]) {
     int lastComputedSpeed = 10;
     // only for logs
     int countLoop = 1;
+    int allLoops = outerRuns * nRuns;
 
     // Simulation
     for (int outer = 0; outer < outerRuns; ++outer) {
-        if (makeGraph == 11) {
-            lastComputedInterval += 250;
+        if (makeGraph == 2) {
             Config::SetDefault("ns3::olsr::RoutingProtocol::HelloInterval", StringValue(std::to_string(lastComputedInterval) + "ms"));
+            lastComputedInterval += 250;
             intervalHelloPackets.push_back(lastComputedInterval);
         }
 
-        if (makeGraph == 12) {
+        if (makeGraph == 3) {
             setUavSpeed(lastComputedSpeed);
             lastComputedSpeed += 20;
             uavSpeedAggregateGraph.push_back(lastComputedSpeed);
         }
 
         for (uint64_t i = 0; i < nRuns; i++) {
-            if (makeGraph >= 10 && makeGraph <= 12) {
+
+            if (makeGraph >= 1 && makeGraph <= 3) {
+                // For On/Off app (UAV)
                 allSendedPackets = 0;
                 allPacketsSendedTimes.clear();
+                // For CSMA
                 allPacketsRecieved = 0;
                 allPacketsArrivalTimes.clear();
-                // ADDED
-                receiveTimes.clear();
+                // For Sink app
                 receivedPackets = 0;
+                receiveTimes.clear();
             }
             if (printLogs) {
-                std::cout << "Num. " << countLoop << std::endl;
+                std::cout << "Num. " << countLoop << "/" << allLoops << std::endl;
             }
 
             doSimulation((double) simTime);
 
-            if (makeGraph == 10) {
+            if (makeGraph == 1) {
                 countPacketForEverySecond(receiveTimes, packetsPerSec, i);
                 countPacketForEverySecond(allPacketsSendedTimes, allSendedPacketsPerSec, i);
                 if (printLogs) {
@@ -485,31 +494,38 @@ int main(int argc, char *argv[]) {
                 }
             }
 
-            if (makeGraph == 11) {
+            if (makeGraph == 2) {
                 allPacketsMeassurements[i].push_back(allPacketsArrivalTimes.size());
+                std::cout << "All sent packets from UAV " << allSendedPackets << std::endl;
+                std::cout << "allPacketsArrivalTimes size " << allPacketsArrivalTimes.size() << std::endl;
             }
-            if (makeGraph == 12) {
+            if (makeGraph == 3) {
                 allPacketsMeassurements[i].push_back(receiveTimes.size());
+                std::cout << "All received packets on Sink app " << receivedPackets << std::endl;
+                std::cout << "receiveTimes size " << receiveTimes.size() << std::endl;
             }
-
             countLoop++;
         }
     }
 
-    if (makeGraph == 10) {
-        std::vector<double> quotient[10];
+    if (makeGraph == 1) {
+        std::vector<double> quotient[nRuns];
         for (int i = 0; i < nRuns; ++i) {
             for (int j = 0; j < packetsPerSec[i].size(); ++j) {
                 if (packetsPerSec[i][j] != 0) {
+                    // push_back() - adds a new element at the end of the vector, after its current last element.
                     quotient[i].push_back(packetsPerSec[i][j]);
+                    someData = true;
                 } else {
                     quotient[i].push_back(0);
                 }
             }
         }
+
+
         fillGnuplotData(quotient);
 
-        std::vector<double> quotient2[10];
+        std::vector<double> quotient2[nRuns];
         for (int i = 0; i < nRuns; ++i) {
             for (int j = 0; j < allSendedPacketsPerSec[i].size(); ++j) {
                 if (allSendedPacketsPerSec[i][j] != 0) {
@@ -525,33 +541,47 @@ int main(int argc, char *argv[]) {
         graf.AddDataset(data2);
     }
 
-    if (makeGraph == 11)
+    if (makeGraph == 2) {
         createXAxisAndConvertToDouble(allPacketsMeassurements, intervalHelloPackets);
-    if (makeGraph == 12)
+    }
+    if (makeGraph == 3) {
         createXAxisAndConvertToDouble(allPacketsMeassurements, uavSpeedAggregateGraph);
+    }
 
     if (makeGraph) {
         // zaverecne spustenie
-        graf.AddDataset(errorBars);
-        graf.AddDataset(data);
-        std::ofstream plotFile("graf" + std::to_string(makeGraph) + ".plt");
-        graf.GenerateOutput(plotFile);
-        plotFile.close();
-        std::string pltName = "gnuplot graf" + std::to_string(makeGraph) + ".plt";
-        if (system(pltName.c_str()));
+        if (someData) {
+            graf.AddDataset(errorBars);
+            graf.AddDataset(data);
+            std::ofstream plotFile("graf" + std::to_string(makeGraph) + ".plt");
+            graf.GenerateOutput(plotFile);
+            plotFile.close();
+            std::string pltName = "gnuplot graf" + std::to_string(makeGraph) + ".plt";
+            if (system(pltName.c_str()));
+        } else {
+            std::cout << "No data for plot, graph will not be generated" << std::endl;
+        }
+
     }
     return 0;
 }
 
 void countPacketForEverySecond(std::vector<double> packetArrivalTimes, std::vector<int> meassurementsArray[], uint64_t index) {
     // we loop through all times when we received packets
+    std::cout << "Index: " << index << " packetArrivalTimes.size() " << packetArrivalTimes.size() << std::endl;
+
+    if (packetArrivalTimes.size() == 0) {
+        // fill - no data
+        for (int k = 0; k < simTime; k++) {
+            meassurementsArray[index].push_back(0);
+        }
+    }
     for (int j = 0; j < packetArrivalTimes.size(); j++) {
         for (int k = 0; k < simTime; k++) {
             // In time 0 we received 0 packets
             if (j == 0)
                 meassurementsArray[index].push_back(0);
             if (packetArrivalTimes.size() > 0) {
-
                 // We got times as double, but for graph we need time as integer. 
                 // We find correct second in simulation
                 if (packetArrivalTimes[j] >= k && packetArrivalTimes[j] < k + 1) {
@@ -600,18 +630,19 @@ void createXAxisAndConvertToDouble(std::vector<int> meassurements[], std::vector
 
 void fillGnuplotData(std::vector<double> meassurements[], std::vector<double> xValues) {
     for (int i = 0; i < meassurements[0].size(); ++i) {
+
         double avg = 0.0;
-        for (uint64_t j = 0; j < nRuns; ++j) {
+        for (int j = 0; j < nRuns; ++j) {
             avg += meassurements[j].at(i);
         }
-        avg /= 10;
+        avg /= nRuns;
 
         double deviation = 0.0;
         for (uint64_t j = 0; j < nRuns; ++j) {
             double k = meassurements[j].at(i) - avg;
             deviation += k*k;
         }
-        deviation /= 10;
+        deviation /= nRuns;
         deviation = sqrt(deviation);
 
         data.Add(xValues[i], avg);
@@ -627,14 +658,14 @@ void computeDataAndSetGraph(std::vector<double> measuredData[], std::vector<doub
         for (uint64_t j = 0; j < nRuns; ++j) {
             avg += measuredData[j].at(i);
         }
-        avg = avg / 10;
+        avg = avg / nRuns;
 
         double deviation = 0.0;
         for (uint64_t j = 0; j < nRuns; ++j) {
             double k = measuredData[j].at(i) - avg;
             deviation = deviation + k*k;
         }
-        deviation /= 10;
+        deviation /= nRuns;
         deviation = sqrt(deviation);
 
         data2.Add(xValues[i], avg);
