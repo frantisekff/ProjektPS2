@@ -35,10 +35,10 @@ Gnuplot setupGraphAndData(int graphNumber);
 // global variables / simulation settings
 bool printLogs = false;
 bool createAnim = false;
-int makeGraph = 0;
+int graphNumber = 0;
 int simTime = 30;
 int distance = 15;
-int helloInterval = 2000; //s
+int helloInterval = 2000; //ms
 int uavSpeed = 25;
 int packetSize = 0;
 
@@ -318,7 +318,7 @@ static void doSimulation(double simulationTime) {
     //                                                                    //
     // ------------------------------------------------------------------ //
 
-    if (makeGraph == 0) {
+    if (graphNumber == 0) {
         Simulator::Schedule(Seconds(7.0), &changeOffTimeApp);
         Simulator::Schedule(Seconds(12.0), &speedUpRobot);
     }
@@ -330,7 +330,7 @@ static void doSimulation(double simulationTime) {
     // If UAV move make callback
     Config::ConnectWithoutContext(pathMobilityTraceSource.str(), MakeCallback(&backToStartPointCallback));
 
-    if (makeGraph >= 1 && makeGraph <= 3) {
+    if (graphNumber >= 1 && graphNumber <= 3) {
         // Rx - A packet has been received on Sink app
         Config::ConnectWithoutContext("/NodeList/0/ApplicationList/0/$ns3::PacketSink/Rx", MakeCallback(&receivedPacketsCallback));
         //Tracking received packets on csma devices
@@ -342,8 +342,6 @@ static void doSimulation(double simulationTime) {
     if (printLogs) {
         std::cout << "Address for UAV " << std::to_string(uavID) << std::endl;
     }
-
-
 
     // -------------------------------------------------------------------//
     //                                                                    //
@@ -376,55 +374,22 @@ int main(int argc, char *argv[]) {
 
     // Set up Hello interval for OLSR routing
     Config::SetDefault("ns3::olsr::RoutingProtocol::HelloInterval", StringValue(std::to_string(helloInterval) + "ms"));
-
-    Gnuplot graf("graf" + std::to_string(makeGraph) + ".svg");
+    Gnuplot graph;
     // prvotne nastavenia v hl.funkcii
-    if (makeGraph) {
-
-        graf.SetTerminal("svg");
-        switch (makeGraph) {
-            case 1:
-                graf.SetTitle("Porovnanie odoslanych paketov s prijatymi paketmi v case (5 spusteni)");
-                graf.SetLegend("Cas [s]", "Priemerny pocet odoslanych/prijatych paketov ");
-
-                data.SetTitle("Prijate pakety (Sink App)");
-                errorBars.SetTitle("Smerodajna odchylka (Sink App)");
-
-                data2.SetTitle("Odoslane pakety (UAV)");
-                data2.SetStyle(Gnuplot2dDataset::LINES);
-
-                errorBars2.SetTitle("Smerodajna odchylka (UAV)");
-                errorBars2.SetStyle(Gnuplot2dDataset::POINTS);
-                errorBars2.SetErrorBars(Gnuplot2dDataset::Y);
-
-                break;
-            case 2:
-                graf.SetTitle("Pocet prijatych paketov vzhladom k intervalu Hello paketov");
-                graf.SetLegend("Interval odosielania Hello paketov [ms]", "Pocet prijatych paketov za celu simulaciu (5x spustene)");
-                data.SetTitle("Pocet prijatych paketov (Sink app)");
-                errorBars.SetTitle("Smerodajna odchylka (Sink App)");
-                break;
-            case 3:
-                graf.SetTitle("Narast poctu prijatych paketov vzhladom k rychlosti UAV");
-                graf.SetLegend("Speed UAV", "Pocet prijatych paketov za celu simulaciu (5x spustene)");
-                data.SetTitle("Pocet prijatych paketov");
-                errorBars.SetTitle("Smerodajna odchylka ");
-                break;
-        }
-
-        data.SetStyle(Gnuplot2dDataset::LINES);
-        errorBars.SetStyle(Gnuplot2dDataset::POINTS);
-        errorBars.SetErrorBars(Gnuplot2dDataset::Y);
+    if (graphNumber) {
+        graph = setupGraphAndData(graphNumber);
     }
     // Set up program for type of graph
-    if (makeGraph == 1) {
+    if (graphNumber == 1) {
         nRuns = 5;
-    } else if (makeGraph >= 2 && makeGraph <= 3)
-        nRuns = 2;
-    else if (makeGraph == 0)
+    } else if (graphNumber == 2) {
+        nRuns = 3;
+    } else if (graphNumber == 3) {
+        nRuns = 5;
+    } else if (graphNumber == 0) {
         nRuns = 1;
-    else {
-        std::cerr << "makeGraph has to be from interval <0; 3>" << std::endl;
+    } else {
+        std::cerr << "GraphNumber has to be from interval <0; 3>" << std::endl;
         return -1;
     }
 
@@ -435,11 +400,11 @@ int main(int argc, char *argv[]) {
     //For graphs, increase hello intervals or speed of UAV,...
     int outerRuns = 1;
 
-    if (makeGraph == 2) {
+    if (graphNumber == 2) {
         outerRuns = 10;
         intervalHelloPackets.clear();
     }
-    if (makeGraph == 3) {
+    if (graphNumber == 3) {
         outerRuns = 10;
         uavSpeedAggregateGraph.clear();
     }
@@ -454,13 +419,13 @@ int main(int argc, char *argv[]) {
 
     // Simulation
     for (int outer = 0; outer < outerRuns; ++outer) {
-        if (makeGraph == 2) {
+        if (graphNumber == 2) {
             Config::SetDefault("ns3::olsr::RoutingProtocol::HelloInterval", StringValue(std::to_string(lastComputedInterval) + "ms"));
             lastComputedInterval += 250;
             intervalHelloPackets.push_back(lastComputedInterval);
         }
 
-        if (makeGraph == 3) {
+        if (graphNumber == 3) {
             setUavSpeed(lastComputedSpeed);
             lastComputedSpeed += 20;
             uavSpeedAggregateGraph.push_back(lastComputedSpeed);
@@ -468,7 +433,7 @@ int main(int argc, char *argv[]) {
 
         for (uint64_t i = 0; i < nRuns; i++) {
 
-            if (makeGraph >= 1 && makeGraph <= 3) {
+            if (graphNumber >= 1 && graphNumber <= 3) {
                 // For On/Off app (UAV)
                 allSendedPackets = 0;
                 allPacketsSendedTimes.clear();
@@ -485,7 +450,7 @@ int main(int argc, char *argv[]) {
 
             doSimulation((double) simTime);
 
-            if (makeGraph == 1) {
+            if (graphNumber == 1) {
                 countPacketForEverySecond(receiveTimes, packetsPerSec, i);
                 countPacketForEverySecond(allPacketsSendedTimes, allSendedPacketsPerSec, i);
                 if (printLogs) {
@@ -494,12 +459,12 @@ int main(int argc, char *argv[]) {
                 }
             }
 
-            if (makeGraph == 2) {
+            if (graphNumber == 2) {
                 allPacketsMeassurements[i].push_back(allPacketsArrivalTimes.size());
                 std::cout << "All sent packets from UAV " << allSendedPackets << std::endl;
                 std::cout << "allPacketsArrivalTimes size " << allPacketsArrivalTimes.size() << std::endl;
             }
-            if (makeGraph == 3) {
+            if (graphNumber == 3) {
                 allPacketsMeassurements[i].push_back(receiveTimes.size());
                 std::cout << "All received packets on Sink app " << receivedPackets << std::endl;
                 std::cout << "receiveTimes size " << receiveTimes.size() << std::endl;
@@ -508,7 +473,7 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    if (makeGraph == 1) {
+    if (graphNumber == 1) {
         std::vector<double> quotient[nRuns];
         for (int i = 0; i < nRuns; ++i) {
             for (int j = 0; j < packetsPerSec[i].size(); ++j) {
@@ -537,26 +502,29 @@ int main(int argc, char *argv[]) {
         }
         createXAxis(quotient2);
 
-        graf.AddDataset(errorBars2);
-        graf.AddDataset(data2);
+        graph.AddDataset(errorBars2);
+        graph.AddDataset(data2);
     }
 
-    if (makeGraph == 2) {
+    if (graphNumber == 2) {
+        someData = true;
         createXAxisAndConvertToDouble(allPacketsMeassurements, intervalHelloPackets);
     }
-    if (makeGraph == 3) {
+
+    if (graphNumber == 3) {
+        someData = true;
         createXAxisAndConvertToDouble(allPacketsMeassurements, uavSpeedAggregateGraph);
     }
 
-    if (makeGraph) {
+    if (graphNumber) {
         // zaverecne spustenie
         if (someData) {
-            graf.AddDataset(errorBars);
-            graf.AddDataset(data);
-            std::ofstream plotFile("graf" + std::to_string(makeGraph) + ".plt");
-            graf.GenerateOutput(plotFile);
+            graph.AddDataset(errorBars);
+            graph.AddDataset(data);
+            std::ofstream plotFile("graf" + std::to_string(graphNumber) + ".plt");
+            graph.GenerateOutput(plotFile);
             plotFile.close();
-            std::string pltName = "gnuplot graf" + std::to_string(makeGraph) + ".plt";
+            std::string pltName = "gnuplot graf" + std::to_string(graphNumber) + ".plt";
             if (system(pltName.c_str()));
         } else {
             std::cout << "No data for plot, graph will not be generated" << std::endl;
@@ -632,7 +600,7 @@ void fillGnuplotData(std::vector<double> meassurements[], std::vector<double> xV
     for (int i = 0; i < meassurements[0].size(); ++i) {
 
         double avg = 0.0;
-        for (int j = 0; j < nRuns; ++j) {
+        for (uint32_t j = 0; j < nRuns; ++j) {
             avg += meassurements[j].at(i);
         }
         avg /= nRuns;
@@ -679,7 +647,7 @@ CommandLine addValuesCmd() {
     cmd.AddValue("anim", "Create NetAnim file", createAnim);
     cmd.AddValue("simulTime", "Total simulation time", simTime);
     cmd.AddValue("printLogs", "Enable logging", printLogs);
-    cmd.AddValue("graph", "[0-3], Choose number of graph [Default: 0 (none)]", makeGraph);
+    cmd.AddValue("graph", "[0-3], Choose number of graph [Default: 0 (none)]", graphNumber);
     cmd.AddValue("distance", "Set distance between APs", distance);
     cmd.AddValue("helloInterval", "Interval of Hello packets [Default: 2000ms]", helloInterval);
     cmd.AddValue("uavSpeed", "Starting speed of UAV", uavSpeed);
@@ -693,7 +661,7 @@ CommandLine addValuesCmd() {
 AnimationInterface createAnimFile(NodeContainer apNodes, NodeContainer serverNodes, NodeContainer uavNodes) {
     AnimationInterface anim("anim.xml");
     // APs
-    for (int i = 0; i < apNodes.GetN(); ++i) {
+    for (uint32_t i = 0; i < apNodes.GetN(); ++i) {
         anim.UpdateNodeColor(apNodes.Get(i)->GetId(), 0, 0, 255);
         anim.UpdateNodeDescription(apNodes.Get(i), "AP " + std::to_string(i + 1));
         anim.UpdateNodeSize(apNodes.Get(i)->GetId(), 2.0, 2.0);
@@ -712,10 +680,45 @@ AnimationInterface createAnimFile(NodeContainer apNodes, NodeContainer serverNod
 
     return anim;
 }
-//
-//Gnuplot setupGraphAndData(int graphNumber){
-//       
-//        
-//        return graf;
-//
-//}
+
+Gnuplot setupGraphAndData(int graphNumber) {
+    Gnuplot graph("graf" + std::to_string(graphNumber) + ".svg");
+
+    graph.SetTerminal("svg");
+    switch (graphNumber) {
+        case 1:
+            graph.SetTitle("Porovnanie odoslanych paketov s prijatymi paketmi v case (5 spusteni)");
+            graph.SetLegend("Cas [s]", "Priemerny pocet odoslanych/prijatych paketov ");
+
+            data.SetTitle("Prijate pakety (Sink App)");
+            errorBars.SetTitle("Smerodajna odchylka (Sink App)");
+
+            data2.SetTitle("Odoslane pakety (UAV)");
+            data2.SetStyle(Gnuplot2dDataset::LINES);
+
+            errorBars2.SetTitle("Smerodajna odchylka (UAV)");
+            errorBars2.SetStyle(Gnuplot2dDataset::POINTS);
+            errorBars2.SetErrorBars(Gnuplot2dDataset::Y);
+
+            break;
+        case 2:
+            graph.SetTitle("Pocet prijatych paketov vzhladom k intervalu Hello paketov");
+            graph.SetLegend("Interval odosielania Hello paketov [ms]", "Pocet prijatych paketov za celu simulaciu (3x spustene)");
+            data.SetTitle("Pocet prijatych paketov (Sink app)");
+            errorBars.SetTitle("Smerodajna odchylka (Sink App)");
+            break;
+        case 3:
+            graph.SetTitle("Pocet prijatych paketov vzhladom k rychlosti UAV");
+            graph.SetLegend("Rychlost UAV", "Pocet prijatych paketov za celu simulaciu (5x spustene)");
+            data.SetTitle("Pocet prijatych paketov");
+            errorBars.SetTitle("Smerodajna odchylka ");
+            break;
+    }
+
+    data.SetStyle(Gnuplot2dDataset::LINES);
+    errorBars.SetStyle(Gnuplot2dDataset::POINTS);
+    errorBars.SetErrorBars(Gnuplot2dDataset::Y);
+
+    return graph;
+
+}
