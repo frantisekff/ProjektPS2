@@ -19,12 +19,9 @@
 using namespace ns3;
 
 void runSim(double);
-void fillGnuplotData(std::vector<int> meassurements[]);
-void fillGnuplotData(std::vector<double> meassurements[]);
-void createXAxis(std::vector<double> meassurements[], Gnuplot2dDataset &dataToSet, Gnuplot2dDataset &errorBarsToSet);
+std::vector<double> createXAxis(std::vector<double> meassurements[], Gnuplot2dDataset &dataToSet, Gnuplot2dDataset &errorBarsToSet);
 
 void createXAxisAndConvertToDouble(std::vector<int> meassurements[], std::vector<double> xValues);
-void fillGnuplotData(std::vector<double> meassurements[], std::vector<double> xValues);
 void countPacketForEverySecond(std::vector<double> packetArrivalTimes, std::vector<int> meassurementsArray[], uint64_t index);
 void computeDataAndSetGraph(std::vector<double> meassurements[], std::vector<double> xValues, Gnuplot2dDataset &dataToSet, Gnuplot2dDataset &errorBarsToSet);
 void receivedPacketsCallback(Ptr< const Packet > packet, const Address &address) ;
@@ -421,33 +418,35 @@ int main(int argc, char *argv[]) {
     }
 
     if (graphNumber == 1) {
-        std::vector<double> quotient[nRuns];
+        std::vector<double> measuredData[nRuns];
         for (int i = 0; i < nRuns; ++i) {
             for (int j = 0; j < packetsPerSec[i].size(); ++j) {
                 if (packetsPerSec[i][j] != 0) {
                     // push_back() - adds a new element at the end of the vector, after its current last element.
-                    quotient[i].push_back(packetsPerSec[i][j]);
+                    measuredData[i].push_back(packetsPerSec[i][j]);
                     someData = true;
                 } else {
-                    quotient[i].push_back(0);
+                    measuredData[i].push_back(0);
                 }
             }
         }
 
 
-        createXAxis(quotient, data, errorBars);
+        std::vector<double> xValues = createXAxis(measuredData, data, errorBars);
+        computeDataAndSetGraph(measuredData, xValues, data, errorBars);
 
-        std::vector<double> quotient2[nRuns];
+        measuredData->clear();
         for (int i = 0; i < nRuns; ++i) {
             for (int j = 0; j < allSendedPacketsPerSec[i].size(); ++j) {
                 if (allSendedPacketsPerSec[i][j] != 0) {
-                    quotient2[i].push_back(allSendedPacketsPerSec[i][j]);
+                    measuredData[i].push_back(allSendedPacketsPerSec[i][j]);
                 } else {
-                    quotient2[i].push_back(0);
+                    measuredData[i].push_back(0);
                 }
             }
         }
-        createXAxis(quotient2, data2, errorBars2);
+        xValues = createXAxis(measuredData, data2, errorBars2);
+        computeDataAndSetGraph(measuredData, xValues, data2, errorBars2);
 
         graph.AddDataset(errorBars2);
         graph.AddDataset(data2);
@@ -464,7 +463,6 @@ int main(int argc, char *argv[]) {
     }
 
     if (graphNumber) {
-        // zaverecne spustenie
         if (someData) {
             graph.AddDataset(errorBars);
             graph.AddDataset(data);
@@ -481,8 +479,13 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
-// Count received packets of Sink App
+// -------------------------------------------------------------------//
+//                                                                    //
+// Implementation of callback functions                               //
+//                                                                    //
+// -------------------------------------------------------------------//
 
+// Count received packets of Sink App
 void receivedPacketsCallback(Ptr< const Packet > packet, const Address &address) {
     receivedPackets++;
     receiveTimes.push_back(Simulator::Now().GetSeconds());
@@ -533,6 +536,7 @@ void backToStartPointCallback(Ptr< const MobilityModel> mobilityModel) {
     }
 }
 
+
 void setUavSpeed(int speed) {
 
     Config::Set("NodeList/" + std::to_string(uavID) + "/$ns3::MobilityModel/$ns3::RandomWaypointMobilityModel/Speed", StringValue("ns3::ConstantRandomVariable[Constant=" + std::to_string(speed) + "]"));
@@ -543,6 +547,11 @@ static void speedUpRobot() {
     Config::Set("NodeList/" + std::to_string(uavID) + "/$ns3::MobilityModel/$ns3::RandomWaypointMobilityModel/Speed", StringValue("ns3::ConstantRandomVariable[Constant=60]"));
 }
 
+// -------------------------------------------------------------------//
+//                                                                    //
+// Functions for aggregate data and creating of graphs                //
+//                                                                    //
+// -------------------------------------------------------------------//
 
 void countPacketForEverySecond(std::vector<double> packetArrivalTimes, std::vector<int> meassurementsArray[], uint64_t index) {
     // we loop through all times when we received packets
@@ -573,29 +582,12 @@ void countPacketForEverySecond(std::vector<double> packetArrivalTimes, std::vect
     }
 }
 
-void fillGnuplotData(std::vector<int> meassurements[]) {
-    // convert the integers to doubles and call the other function
-    std::vector<double> doubles[nRuns];
-    for (int i = 0; i < nRuns; ++i) {
-        doubles[i] = std::vector<double>(meassurements[i].begin(), meassurements[i].end());
-    }
-    fillGnuplotData(doubles);
-}
-
-void fillGnuplotData(std::vector<double> meassurements[]) {
-    std::vector<double> xVals;
-    for (int i = 0; i < meassurements[0].size(); ++i) {
-        xVals.push_back((double) i);
-    }
-    fillGnuplotData(meassurements, xVals);
-}
-
-void createXAxis(std::vector<double> measuredData[], Gnuplot2dDataset &dataToSet, Gnuplot2dDataset &errorBarsToSet ) {
+std::vector<double> createXAxis(std::vector<double> measuredData[], Gnuplot2dDataset &dataToSet, Gnuplot2dDataset &errorBarsToSet ) {
     std::vector<double> xValues;
     for (int i = 0; i < measuredData[0].size(); ++i) {
         xValues.push_back((double) i);
     }
-    computeDataAndSetGraph(measuredData, xValues, dataToSet, errorBarsToSet);
+    return xValues;
 }
 
 void createXAxisAndConvertToDouble(std::vector<int> meassurements[], std::vector<double> xValues) {
@@ -603,33 +595,10 @@ void createXAxisAndConvertToDouble(std::vector<int> meassurements[], std::vector
     for (int i = 0; i < nRuns; ++i) {
         doubles[i] = std::vector<double>(meassurements[i].begin(), meassurements[i].end());
     }
-    fillGnuplotData(doubles, xValues);
-}
-
-void fillGnuplotData(std::vector<double> meassurements[], std::vector<double> xValues) {
-    for (int i = 0; i < meassurements[0].size(); ++i) {
-
-        double avg = 0.0;
-        for (uint32_t j = 0; j < nRuns; ++j) {
-            avg += meassurements[j].at(i);
-        }
-        avg /= nRuns;
-
-        double deviation = 0.0;
-        for (uint64_t j = 0; j < nRuns; ++j) {
-            double k = meassurements[j].at(i) - avg;
-            deviation += k*k;
-        }
-        deviation /= nRuns;
-        deviation = sqrt(deviation);
-
-        data.Add(xValues[i], avg);
-        errorBars.Add(xValues[i], avg, deviation);
-    }
+    computeDataAndSetGraph(doubles, xValues, data, errorBars);
 }
 
 // Compute avarage and deviation
-
 void computeDataAndSetGraph(std::vector<double> measuredData[], std::vector<double> xValues, Gnuplot2dDataset &dataToSet, Gnuplot2dDataset &errorBarsToSet ) {
     for (std::vector<double>::size_type i = 0; i < measuredData[0].size(); ++i) {
         double avg = 0.0;
@@ -650,6 +619,13 @@ void computeDataAndSetGraph(std::vector<double> measuredData[], std::vector<doub
         errorBarsToSet.Add(xValues[i], avg, deviation);
     }
 }
+
+
+// -------------------------------------------------------------------//
+//                                                                    //
+// General functions                                                  //
+//                                                                    //
+// -------------------------------------------------------------------//
 
 CommandLine addValuesCmd() {
     // CommandLine arguments
