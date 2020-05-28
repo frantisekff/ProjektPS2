@@ -341,14 +341,14 @@ int main(int argc, char *argv[]) {
     seedManager.SetRun(nRuns);
 
     //For graphs, increase hello intervals or speed of UAV,...
-    int outerRuns = 1;
+    int aggregateRuns = 1;
 
     if (graphNumber == 2) {
-        outerRuns = 2;
+        aggregateRuns = 10;
         intervalHelloPackets.clear();
     }
     if (graphNumber == 3) {
-        outerRuns = 2;
+        aggregateRuns = 10;
         uavSpeedAggregateGraph.clear();
     }
 
@@ -358,10 +358,10 @@ int main(int argc, char *argv[]) {
     int lastComputedSpeed = 10;
     // only for logs
     int countLoop = 1;
-    int allLoops = outerRuns * nRuns;
+    int allLoops = aggregateRuns * nRuns;
 
     // Simulation
-    for (int outer = 0; outer < outerRuns; ++outer) {
+    for (int aggregateIndex = 0; aggregateIndex < aggregateRuns; ++aggregateIndex) {
         if (graphNumber == 2) {
             Config::SetDefault("ns3::olsr::RoutingProtocol::HelloInterval", StringValue(std::to_string(lastComputedInterval) + "ms"));
             lastComputedInterval += 250;
@@ -470,6 +470,7 @@ int main(int argc, char *argv[]) {
             plotFile.close();
             std::string pltName = "gnuplot graf" + std::to_string(graphNumber) + ".plt";
             if (system(pltName.c_str()));
+            std::cout << "Graph was generated" << std::endl;
         } else {
             std::cout << "No data for plot, graph will not be generated" << std::endl;
         }
