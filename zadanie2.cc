@@ -15,6 +15,9 @@
 #include "ns3/gnuplot.h"
 #include "ns3/rng-seed-manager.h"
 #include <math.h>
+#include "ns3/aodv-helper.h"
+#include <iostream>
+#include <string>
 
 using namespace ns3;
 
@@ -45,8 +48,8 @@ int simTime = 30;
 int distance = 15;
 int helloInterval = 2000; //ms
 int uavSpeed = 25;
-int packetSize = 0;
-
+int packetSize = 1472;
+bool useAodv = false;
 // Variables for Graphs
 Gnuplot2dDataset data;
 // True if we got some data for plot
@@ -148,8 +151,13 @@ static void makeSimulation(double simulationTime) {
     // Add the IPv4 protocol and choose routing type
     InternetStackHelper internet;
 
-    OlsrHelper olsr;
-    internet.SetRoutingHelper(olsr);
+    if (!useAodv) {
+        OlsrHelper olsr;
+        internet.SetRoutingHelper(olsr);
+    } else {
+        AodvHelper aodv;
+        internet.SetRoutingHelper(aodv);
+    }
     internet.Install(wifiNodes);
 
     // Assign IPv4 addresses to the device drivers that we just created.
@@ -175,8 +183,8 @@ static void makeSimulation(double simulationTime) {
     MobilityHelper apMobilityModel;
     apMobilityModel.SetMobilityModel("ns3::ConstantPositionMobilityModel");
     apMobilityModel.SetPositionAllocator("ns3::GridPositionAllocator",
-            "MinX", DoubleValue(20.0), // start X position
-            "MinY", DoubleValue(20.0), // start X position
+            "MinX", DoubleValue(distance), // start X position
+            "MinY", DoubleValue(distance), // start X position
             "DeltaX", DoubleValue(distance), // space between nodes
             "DeltaY", DoubleValue(distance), // space between nodes
             "GridWidth", UintegerValue(5),
@@ -309,14 +317,19 @@ void runSim(double simulationTime) {
 
 int main(int argc, char *argv[]) {
     // Simulation defaults are typically set before command line arguments are parsed.
-    Config::SetDefault("ns3::OnOffApplication::PacketSize", StringValue("1472"));
+    Config::SetDefault("ns3::OnOffApplication::PacketSize", StringValue(std::to_string(packetSize)));
     Config::SetDefault("ns3::OnOffApplication::DataRate", StringValue("100kb/s"));
 
     CommandLine cmd = addValuesCmd();
     cmd.Parse(argc, argv);
 
     // Set up Hello interval for OLSR routing
-    Config::SetDefault("ns3::olsr::RoutingProtocol::HelloInterval", StringValue(std::to_string(helloInterval) + "ms"));
+    if (!useAodv && graphNumber == 0) {
+        Config::SetDefault("ns3::olsr::RoutingProtocol::HelloInterval", StringValue(std::to_string(helloInterval) + "ms"));
+    } else if (useAodv && graphNumber == 0) {
+        Config::SetDefault("ns3::aodv::RoutingProtocol::HelloInterval", StringValue(std::to_string(helloInterval) + "ms"));
+    }
+
     Gnuplot graph;
     // prvotne nastavenia v hl.funkcii
     if (graphNumber) {
@@ -363,7 +376,12 @@ int main(int argc, char *argv[]) {
     // Simulation
     for (int aggregateIndex = 0; aggregateIndex < aggregateRuns; ++aggregateIndex) {
         if (graphNumber == 2) {
-            Config::SetDefault("ns3::olsr::RoutingProtocol::HelloInterval", StringValue(std::to_string(lastComputedInterval) + "ms"));
+            if (useAodv) {
+                Config::SetDefault("ns3::aodv::RoutingProtocol::HelloInterval", StringValue(std::to_string(lastComputedInterval) + "ms"));
+            } else {
+                Config::SetDefault("ns3::olsr::RoutingProtocol::HelloInterval", StringValue(std::to_string(lastComputedInterval) + "ms"));
+            }
+
             lastComputedInterval += 250;
             intervalHelloPackets.push_back(lastComputedInterval);
         }
@@ -637,7 +655,8 @@ CommandLine addValuesCmd() {
     cmd.AddValue("distance", "Set distance between APs", distance);
     cmd.AddValue("helloInterval", "Interval of Hello packets [Default: 2000ms]", helloInterval);
     cmd.AddValue("uavSpeed", "Starting speed of UAV", uavSpeed);
-    cmd.AddValue("pktSize", "Set size of packets", packetSize);
+    cmd.AddValue("aodv", "if set aodv [Default: false]", useAodv);
+    cmd.AddValue("pktSize", "Set size of packets [Default:1472]", packetSize);
 
     return cmd;
 }
@@ -672,7 +691,15 @@ Gnuplot setupGraphAndData(int graphNumber) {
 
     graph.SetTerminal("svg");
     if (graphNumber == 1) {
-        graph.SetTitle("Porovnanie odoslanych paketov s prijatymi paketmi v case (5 spusteni)");
+        std::string title = "Porovnanie odoslanych paketov s prijatymi paketmi v case (5 spusteni)";
+        std::string routingTypeAdded = "";
+        if (useAodv) {
+            routingTypeAdded += "(AODV)";
+        } else {
+            routingTypeAdded += "(OLSR)";
+        }
+
+        graph.SetTitle(title + routingTypeAdded);
         graph.SetLegend("Cas [s]", "Priemerny pocet odoslanych/prijatych paketov ");
 
         data.SetTitle("Prijate pakety (Sink App)");
