@@ -126,8 +126,7 @@ static void makeSimulation(double simulationTime) {
 
     // Create the wifi 
     WifiHelper wifi;
-    wifi.SetRemoteStationManager("ns3::ConstantRateWifiManager",
-            "DataMode", StringValue("OfdmRate48Mbps")); // The highest possible value for Ofdm error model
+    wifi.SetRemoteStationManager("ns3::AarfWifiManager"); // The highest possible value for Ofdm error model
 
     WifiMacHelper mac;
     mac.SetType("ns3::AdhocWifiMac");
@@ -348,10 +347,14 @@ int main(int argc, char *argv[]) {
         std::cerr << "GraphNumber has to be from interval <0; 3>" << std::endl;
         return -1;
     }
-
-    // Manage RNG
-    RngSeedManager seedManager;
-    seedManager.SetRun(nRuns);
+    
+    // Set RNG
+    // Before simulation we set Seed to current time
+    // During simulation we change only SetRuns
+    
+    time_t currentTime;
+    time(&currentTime); //Grab current time as seed
+    RngSeedManager::SetSeed(currentTime);
 
     //For graphs, increase hello intervals or speed of UAV,...
     int aggregateRuns = 1;
@@ -408,6 +411,9 @@ int main(int argc, char *argv[]) {
             if (printLogs) {
                 std::cout << "Num. " << countLoop << "/" << allLoops << std::endl;
             }
+            // Before simualtion change run number. Important for generating random numbers
+            // Source: https://www.nsnam.org/docs/manual/html/random-variables.html
+            RngSeedManager::SetRun (nRuns * aggregateIndex );
 
             makeSimulation((double) simTime);
 
